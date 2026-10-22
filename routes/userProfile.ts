@@ -21,6 +21,14 @@ function favicon () {
   return utils.extractFilename(config.get('application.favicon'))
 }
 
+function escapeForPug (str: string | undefined): string | undefined {
+  if (!str) {
+    return str
+  }
+  const escaped = str.replace(/([#!]{)/g, '\\$1')
+  return escaped.startsWith('\\') ? escaped : '\\' + escaped
+}
+
 export function getUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
     let template: string
@@ -70,15 +78,19 @@ export function getUserProfile () {
           numericRegex.test(code) ||
           booleanRegex.test(code)
 
-        if (!isSafe) {
+        if (!isSafe || code.includes('#{') || code.includes('!{')) {
           throw new Error('Unsafe code execution blocked')
         }
-        username = eval(code) // eslint-disable-line no-eval
+        const evaluated = eval(code) // eslint-disable-line no-eval
+        if (typeof evaluated === 'string' && (evaluated.includes('#{') || evaluated.includes('!{'))) {
+          throw new Error('Unsafe code execution blocked')
+        }
+        username = String(evaluated)
       } catch (err) {
-        username = '\\' + username
+        username = escapeForPug(user.username)
       }
     } else {
-      username = '\\' + username
+      username = escapeForPug(username)
     }
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
